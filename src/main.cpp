@@ -5,18 +5,26 @@
 #include<cerrno>
 #include<cstring>
 #include<vector>
+#include<csignal>
+
 
 using namespace std;
 
 const int PORT_NUMBER = 8080;
 const int MAX_QUEUE_SIZE = 10;
 
+volatile sig_atomic_t SIGINT_SIGNAL = 0;
+
 struct connectedClientsInfo{
     int fileDescriptor;
     sockaddr_in socketAddress;
     // socklen_t socketLength;
 };
-
+void signalHandler(int signal_number)
+{
+    SIGINT_SIGNAL = 1;
+    return;
+}
 int createSocket(){
     // creating a scoket returns a file descriptor for the socket
     int fileDescriptor = socket(AF_INET,SOCK_STREAM,0);
@@ -64,6 +72,9 @@ int main()
     }
     else
         cout<<"Listening on socket created and bound to port........"<<endl;
+    // listen for a Ctrl+C and exit the server gracefully.
+    signal(SIGINT,(sighandler_t)signalHandler); // typecast to 'sighandler_t' type
+
     // accept connections on a while loop
     // initialise a vector of struct connectedClientInfo
     vector<connectedClientsInfo> clientsInfo;
@@ -74,7 +85,15 @@ int main()
         int newSocket = accept(fileDescriptor,(struct sockaddr *)&peerSocket,&peerSocketLength);
         bool skipClient = false;
         if(newSocket == -1)
+        {
+            if(errno == EINTR)
+            {
+                if(SIGINT_SIGNAL)
+                    break;
+                continue;
+            }
             cout<<"Error accepting connection from client................."<<endl;
+        }
         else{
             cout<<"Accepted incoming connection........."<<endl;
             connectedClientsInfo currentClient;
@@ -126,7 +145,20 @@ int main()
                 else
                    cout<<"Wrote "<<bytesWritten<<" bytes from buffer"<<endl;
             }
-
+        }
+        if(SIGINT_SIGNAL){
+            // clear all the client connections
+            for(auto it=clientsInfo.begin();it<clientsInfo.end();it++)
+            {
+                int clientFileDescriptor = (*it).fileDescriptor;
+                int status = close(clientFileDescriptor);
+                if(status == 0)cout<<"closed client connection ,fd: "<<clientFileDescriptor<<endl;
+                else cout<<"failed to close connection with client fd: "<<clientFileDescriptor<<endl;
+            }
+            int status = close(fileDescriptor);
+            if(status == 0)cout<<"closed listener socket"<<endl;
+            else cout<<"error closing listener socket..........."<<endl;
+            break;
         }
     }
     return 0;
