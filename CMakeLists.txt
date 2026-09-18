@@ -18,3 +18,13 @@ target_compile_options(redis-server PRIVATE
     -Wextra
     -Wpedantic
 )
+
+add_executable(tcp_tests
+    tests/tcp_tests.cpp
+)
+
+target_compile_options(tcp_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)

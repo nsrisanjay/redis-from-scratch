@@ -20,7 +20,7 @@ struct connectedClientsInfo{
     sockaddr_in socketAddress;
     // socklen_t socketLength;
 };
-void signalHandler(int signal_number)
+void signalHandler(int)
 {
     SIGINT_SIGNAL = 1;
     return;
@@ -37,6 +37,14 @@ int bindSocket(int fileDescriptor,struct sockaddr* pointer,socklen_t socketLengt
 
 int main(int argc,char *argv[])
 {
+    struct sigaction sa{};
+    sa.sa_handler = signalHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    sigaction(SIGINT, &sa, nullptr);
+
+
     std::cout << "Redis from scratch\n";
 
     int fileDescriptor = createSocket();
@@ -96,7 +104,7 @@ int main(int argc,char *argv[])
     else
         cout<<"Listening on socket created and bound to port........"<<endl;
     // listen for a Ctrl+C and exit the server gracefully.
-    signal(SIGINT,(sighandler_t)signalHandler); // typecast to 'sighandler_t' type
+    // signal(SIGINT,(sighandler_t)signalHandler); // typecast to 'sighandler_t' type
 
     // accept connections on a while loop
     // initialise a vector of struct connectedClientInfo
@@ -168,7 +176,6 @@ int main(int argc,char *argv[])
                     int status = close(newSocket);
                     if(status == 0)cout<<"close client connection successfully.........."<<endl;
                     else{
-                        int error = errno;
                         cout<<"error closing client connection : "<<strerror(errno)<<endl;
                         errno = 0;
                     }
