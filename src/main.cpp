@@ -10,7 +10,7 @@
 
 using namespace std;
 
-const int PORT_NUMBER = 8080;
+const int FALLBACK_PORT_NUMBER = 6969;
 const int MAX_QUEUE_SIZE = 10;
 
 volatile sig_atomic_t SIGINT_SIGNAL = 0;
@@ -35,7 +35,7 @@ int bindSocket(int fileDescriptor,struct sockaddr* pointer,socklen_t socketLengt
     return bind(fileDescriptor,pointer,socketLength);
 }
 
-int main()
+int main(int argc,char *argv[])
 {
     std::cout << "Redis from scratch\n";
 
@@ -47,12 +47,32 @@ int main()
         return 0;
     }
     // bind the socket onto a port for listening
+    // use type sockaddr_in for IPv4 netwrok type
     sockaddr_in socketBindVars;
     socketBindVars.sin_family = AF_INET;
+
+    int port_number = FALLBACK_PORT_NUMBER;
+    if(argc > 1)
+    {
+        try{
+            int portNumber = stoi(argv[1]);
+            if(portNumber > 0 && portNumber <= 65535)
+                port_number = portNumber;
+            else    
+                throw runtime_error("error");
+        }
+        catch(exception &e)
+        {
+            cout<<"running on desired port number failed, falling back to "<<port_number<<endl;
+        }
+    }
+
     // htons converts the port number to network byte order(big-endian)
-    socketBindVars.sin_port = htons(PORT_NUMBER); 
+    socketBindVars.sin_port = htons(port_number); 
+    // INADDR_ANY  basically represents 0.0.0.0 ie listen from any netwrok interfaces
     socketBindVars.sin_addr.s_addr = htonl(INADDR_ANY);
 
+    // socket length in bytes
     socklen_t socketLength = sizeof(socketBindVars);
     
     // type caste to (struct sockaddr*) so that its accepted by the bind function.
@@ -62,7 +82,7 @@ int main()
         return 0;
     }
     else
-        cout<<"Socket bound to port: "<<PORT_NUMBER<<endl;
+        cout<<"Socket bound to port: "<<port_number<<endl;
     // now listen for connections
     int listeningStatus = listen(fileDescriptor,MAX_QUEUE_SIZE);
     if(listeningStatus == -1)
@@ -84,13 +104,16 @@ int main()
         socklen_t peerSocketLength = sizeof(peerSocket);
         int newSocket = accept(fileDescriptor,(struct sockaddr *)&peerSocket,&peerSocketLength);
         bool skipClient = false;
+        if(SIGINT_SIGNAL == 1)
+            break;
         if(newSocket == -1)
         {
             if(errno == EINTR)
             {
                 if(SIGINT_SIGNAL)
                     break;
-                continue;
+                else
+                    continue;
             }
             cout<<"Error accepting connection from client................."<<endl;
         }
@@ -102,64 +125,85 @@ int main()
             // currentClient.socketLength = peerSocketLength;
             clientsInfo.push_back(currentClient);
 
-            //read the contents from the connected client
+            //read the contents from the connected client................................................................................
             // init a byte buffer
             char readBuffer[1024];
-            int maxByteReads = 200;
-            int bytesRead = read(newSocket,readBuffer,maxByteReads);
-
-            if(bytesRead == -1)
+            int bytesExpected = 200;
+            int bytesRemaining = bytesExpected;
+            int totalBytesRead = 0;
+            while(totalBytesRead < bytesExpected)
             {
-                cout<<"Error reading bytes from connection........."<<endl;
-                skipClient = true;
-            }
-            else if(bytesRead == 0){
-                cout<<"EOF or no data to read currently,client has closed connection........."<<endl;
-                // close connection and remove the client from clientsInfo
-                for (auto p=clientsInfo.begin();p<clientsInfo.end();p++){
-                    if((*p).fileDescriptor == newSocket)
-                    {
-                        clientsInfo.erase(p);
-                        cout<<"removed the client from tracking since connection closed........"<<endl;
-                        break;
-                    }
+                int bytesRead = read(newSocket,&readBuffer[totalBytesRead],bytesRemaining);
+    
+                if(bytesRead == -1)
+                {
+                    cout<<"Error reading bytes from connection........."<<endl;
+                    skipClient = true;
+                    break;
                 }
-                //close connection
-                int status = close(newSocket);
-                if(status == 0)
-                    cout<<"closed connection with client successfully.........."<<endl;
+                else if(bytesRead == 0){
+                    cout<<"EOF or no data to read currently,client has closed connection........."<<endl;
+                    // close connection and remove the client from clientsInfo
+                    for (auto p=clientsInfo.begin();p<clientsInfo.end();p++){
+                        if((*p).fileDescriptor == newSocket)
+                        {
+                            clientsInfo.erase(p);
+                            cout<<"removed the client from tracking since connection closed........"<<endl;
+                            break;
+                        }
+                    }
+                    //close connection
+                    int status = close(newSocket);
+                    if(status == 0)
+                        cout<<"closed connection with client successfully.........."<<endl;
+                    else
+                        cout<<"error closing connection with client.........."<<endl;
+                    skipClient = true;
+                    break;
+                }
                 else
-                    cout<<"error closing connection with client.........."<<endl;
-                skipClient = true;
-            }else
-                cout<<"Read "<<bytesRead<<" bytes from buffer"<<endl;
-            // process bytes, some logic can come later
-            char writeBuffer[1024] = {'a'};
-            int maxByteWrites = 200;
-            if(skipClient == false){
-                int bytesWritten = write(newSocket,writeBuffer,200);
-                if(bytesWritten == -1)
-                    cout<<"Error writing bytes from connection........."<<endl;
-                else if(bytesWritten == 0)
-                    cout<<"EOF or no data to write currently........."<<endl;
-                else
-                   cout<<"Wrote "<<bytesWritten<<" bytes from buffer"<<endl;
+                    cout<<"Read "<<bytesRead<<" bytes from buffer"<<endl;
+                totalBytesRead += bytesRead;
+                bytesRemaining = bytesExpected - totalBytesRead;
             }
-        }
-        if(SIGINT_SIGNAL){
-            // clear all the client connections
-            for(auto it=clientsInfo.begin();it<clientsInfo.end();it++)
+
+            // process bytes which are read, some logic can come later................
+
+
+            // write from buffer to client .........................................................................
+            int totalBytesToWrite = totalBytesRead;
+            int totalBytesWritten = 0;
+            while(totalBytesWritten < totalBytesToWrite)
             {
-                int clientFileDescriptor = (*it).fileDescriptor;
-                int status = close(clientFileDescriptor);
-                if(status == 0)cout<<"closed client connection ,fd: "<<clientFileDescriptor<<endl;
-                else cout<<"failed to close connection with client fd: "<<clientFileDescriptor<<endl;
+                int bytesRemainingToWrite = totalBytesToWrite - totalBytesWritten;
+                int bytesWritten = write(newSocket,&readBuffer[totalBytesWritten],bytesRemainingToWrite);
+                if(bytesWritten == -1)
+                {
+                    cout<<"Error writing bytes to connection........."<<endl;
+                    break;
+                }
+                else if(bytesWritten == 0)
+                {
+                    cout<<"Write returned 0 bytes........."<<endl;
+                    break;
+                }
+                totalBytesWritten += bytesWritten;
+                cout<<"Wrote "<<bytesWritten<<" bytes"<<endl;
             }
-            int status = close(fileDescriptor);
-            if(status == 0)cout<<"closed listener socket"<<endl;
-            else cout<<"error closing listener socket..........."<<endl;
-            break;
         }
+    }
+    if(SIGINT_SIGNAL){
+        // clear all the client connections
+        for(auto it=clientsInfo.begin();it<clientsInfo.end();it++)
+        {
+            int clientFileDescriptor = (*it).fileDescriptor;
+            int status = close(clientFileDescriptor);
+            if(status == 0)cout<<"closed client connection ,fd: "<<clientFileDescriptor<<endl;
+            else cout<<"failed to close connection with client fd: "<<clientFileDescriptor<<endl;
+        }
+        int status = close(fileDescriptor);
+        if(status == 0)cout<<"closed listener socket"<<endl;
+        else cout<<"error closing listener socket..........."<<endl;
     }
     return 0;
 }
