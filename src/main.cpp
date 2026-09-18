@@ -79,6 +79,8 @@ int main(int argc,char *argv[])
     int bindStatus = bindSocket(fileDescriptor,(struct sockaddr*)&socketBindVars,socketLength);
     if(bindStatus == -1){
         cout<<"Error binding the socket................"<<endl;
+        cout<<"error message : "<<strerror(errno)<<endl;
+        errno = 0;
         return 0;
     }
     else
@@ -87,7 +89,8 @@ int main(int argc,char *argv[])
     int listeningStatus = listen(fileDescriptor,MAX_QUEUE_SIZE);
     if(listeningStatus == -1)
     {
-        cout<<"Listening failed............"<<endl;
+        cout<<"Listening failed............error message : "<<strerror(errno)<<endl;
+        errno = 0;
         return 0;
     }
     else
@@ -116,6 +119,7 @@ int main(int argc,char *argv[])
                     continue;
             }
             cout<<"Error accepting connection from client................."<<endl;
+            cout<<"error is : "<<strerror(errno)<<endl;
         }
         else{
             cout<<"Accepted incoming connection........."<<endl;
@@ -137,11 +141,41 @@ int main(int argc,char *argv[])
     
                 if(bytesRead == -1)
                 {
-                    cout<<"Error reading bytes from connection........."<<endl;
+                    if(errno == EINTR)
+                    {
+                        if(SIGINT_SIGNAL)
+                        {
+                            skipClient = true;
+                            break;
+                        }
+                        else
+                            continue;
+                    }
+                    cout<<"Error reading bytes from connection........."<<strerror(errno)<<endl;
+                    errno = 0;
                     skipClient = true;
+                    // remove client connection
+                    for(auto it=clientsInfo.begin();it<clientsInfo.end();it++)
+                    {
+                        int fd = (*it).fileDescriptor;
+                        if(fd == newSocket)
+                        {
+                            clientsInfo.erase(it);
+                            break;
+                        }
+                    }
+                    // close the client connection
+                    int status = close(newSocket);
+                    if(status == 0)cout<<"close client connection successfully.........."<<endl;
+                    else{
+                        int error = errno;
+                        cout<<"error closing client connection : "<<strerror(errno)<<endl;
+                        errno = 0;
+                    }
                     break;
                 }
                 else if(bytesRead == 0){
+                    
                     cout<<"EOF or no data to read currently,client has closed connection........."<<endl;
                     // close connection and remove the client from clientsInfo
                     for (auto p=clientsInfo.begin();p<clientsInfo.end();p++){
@@ -169,26 +203,58 @@ int main(int argc,char *argv[])
 
             // process bytes which are read, some logic can come later................
 
-
             // write from buffer to client .........................................................................
-            int totalBytesToWrite = totalBytesRead;
-            int totalBytesWritten = 0;
-            while(totalBytesWritten < totalBytesToWrite)
+            if(skipClient != true)
             {
-                int bytesRemainingToWrite = totalBytesToWrite - totalBytesWritten;
-                int bytesWritten = write(newSocket,&readBuffer[totalBytesWritten],bytesRemainingToWrite);
-                if(bytesWritten == -1)
+                int totalBytesToWrite = totalBytesRead;
+                int totalBytesWritten = 0;
+                while(totalBytesWritten < totalBytesToWrite)
                 {
-                    cout<<"Error writing bytes to connection........."<<endl;
-                    break;
+                    int bytesRemainingToWrite = totalBytesToWrite - totalBytesWritten;
+                    int bytesWritten = write(newSocket,&readBuffer[totalBytesWritten],bytesRemainingToWrite);
+                    if(bytesWritten == -1)
+                    {
+                        if(errno == EINTR)
+                        {
+                            if(SIGINT_SIGNAL)
+                            {
+                                skipClient= true;
+                                break;
+                            }
+                            else
+                                continue;
+                        }
+                        cout<<"Error writing bytes from connection........."<<strerror(errno)<<endl;
+                        errno = 0;
+                        skipClient = true;
+                        // remove client connection
+                        for(auto it=clientsInfo.begin();it<clientsInfo.end();it++)
+                        {
+                            int fd = (*it).fileDescriptor;
+                            if(fd == newSocket)
+                            {
+                                clientsInfo.erase(it);
+                                break;
+                            }
+                        }
+                        // close the client connection
+                        int status = close(newSocket);
+                        if(status == 0)cout<<"close client connection successfully.........."<<endl;
+                        else{
+                            int error = errno;
+                            cout<<"error closing client connection : "<<strerror(errno)<<endl;
+                            errno = 0;
+                        }
+                        break;
+                    }
+                    else if(bytesWritten == 0)
+                    {
+                        cout<<"Write returned 0 bytes........."<<endl;
+                        break;
+                    }
+                    totalBytesWritten += bytesWritten;
+                    cout<<"Wrote "<<bytesWritten<<" bytes"<<endl;
                 }
-                else if(bytesWritten == 0)
-                {
-                    cout<<"Write returned 0 bytes........."<<endl;
-                    break;
-                }
-                totalBytesWritten += bytesWritten;
-                cout<<"Wrote "<<bytesWritten<<" bytes"<<endl;
             }
         }
     }
