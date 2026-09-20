@@ -54,7 +54,7 @@ bool sendAll(int socketFd, const vector<char>& data)
 {
     int totalSent = 0;
     int totalToSend = data.size();
-
+    std::cout << "bytes sent by the client are: " << std::endl;
     while(totalSent < totalToSend)
     {
         int remaining = totalToSend - totalSent;
@@ -78,9 +78,13 @@ bool sendAll(int socketFd, const vector<char>& data)
             cerr << "send() returned 0" << endl;
             return false;
         }
-
+        for(int i=totalSent;i<totalSent+bytesSent;i++)
+        {
+            std::cout<<data[i];
+        }
         totalSent += bytesSent;
     }
+    std::cout << std::endl;
 
     return true;
 }
@@ -91,7 +95,7 @@ bool receiveAll(int socketFd, vector<char>& data, int expectedBytes)
     data.resize(expectedBytes);
 
     int totalReceived = 0;
-
+    std::cout << "bytes written to client by server write() bytes: " << std::endl;
     while(totalReceived < expectedBytes)
     {
         int remaining = expectedBytes - totalReceived;
@@ -116,9 +120,14 @@ bool receiveAll(int socketFd, vector<char>& data, int expectedBytes)
                  << expectedBytes << " bytes" << endl;
             return false;
         }
+        for(int i = totalReceived;i<totalReceived+bytesReceived;i++)
+        {
+            std::cout<<data[i];
+        }
 
         totalReceived += bytesReceived;
     }
+    std::cout << std::endl;
 
     return true;
 }
@@ -141,6 +150,37 @@ vector<char> createTestData(char value)
     return vector<char>(EXPECTED_BYTES, value);
 }
 
+vector<char> createTestDataFromString(const string& value)
+{
+    vector<char> data;
+    data.reserve(EXPECTED_BYTES);
+
+    while(static_cast<int>(data.size()) < EXPECTED_BYTES)
+    {
+        for(char currentChar : value)
+        {
+            if(static_cast<int>(data.size()) == EXPECTED_BYTES)
+                break;
+
+            data.push_back(currentChar);
+        }
+    }
+
+    return data;
+}
+
+void printClientChunk(const vector<char>& data, int offset, int bytesSent)
+{
+    std::cout << "bytes sent by the client chunk are: " << std::endl;
+
+    for(int i = offset; i < offset + bytesSent; i++)
+    {
+        std::cout << data[i];
+    }
+
+    std::cout << std::endl;
+}
+
 bool testBasicExchange()
 {
     int socketFd;
@@ -148,7 +188,9 @@ bool testBasicExchange()
     if(!connectToServer(socketFd))
         return false;
 
-    vector<char> sentData = createTestData('A');
+    vector<char> sentData = createTestDataFromString(
+        "A38yr9feigbosidbgsoelh93u84ysihgnldkngsldbgirohsdioghbs,/[;]lsanjayyyyyyy"
+    );
 
     if(!sendAll(socketFd, sentData))
     {
@@ -177,7 +219,9 @@ bool testPartialRead()
     if(!connectToServer(socketFd))
         return false;
 
-    vector<char> data = createTestData('B');
+    vector<char> data = createTestDataFromString(
+        "A38yr9feigbosidbgsoelh93u84ysihgnldkngsldbgirohsdioghbs"
+    );
 
     int firstChunk = 50;
     int secondChunk = 75;
@@ -197,6 +241,7 @@ bool testPartialRead()
         close(socketFd);
         return false;
     }
+    printClientChunk(data, offset, bytesSent);
 
     offset += firstChunk;
 
@@ -214,6 +259,7 @@ bool testPartialRead()
         close(socketFd);
         return false;
     }
+    printClientChunk(data, offset, bytesSent);
 
     offset += secondChunk;
 
@@ -231,6 +277,7 @@ bool testPartialRead()
         close(socketFd);
         return false;
     }
+    printClientChunk(data, offset, bytesSent);
 
     vector<char> receivedData;
 
@@ -330,7 +377,9 @@ bool testReconnect()
         return false;
 
     vector<char> firstData =
-        createTestData('E');
+        createTestDataFromString(
+            "A38yr9feigbosidbgsoelh93u84ysihgnldkngsldbgirohsdioghbs"
+        );
 
     if(!sendAll(socketFd, firstData))
     {
@@ -362,7 +411,9 @@ bool testReconnect()
         return false;
 
     vector<char> secondData =
-        createTestData('F');
+        createTestDataFromString(
+            "A38yr9feigbosidbgsoelh93u84ysihgnldkngsldbgirohsdioghbs"
+        );
 
     if(!sendAll(socketFd, secondData))
     {
@@ -391,22 +442,22 @@ void runTest(
     bool (*testFunction)()
 )
 {
-    cout << "Running: " << testName << " ... ";
+    std::cout << "Running: " << testName << " ... ";
 
     bool result = testFunction();
 
     if(result)
-        cout << "PASS" << endl;
+        std::cout << "PASS" << std::endl;
     else
-        cout << "FAIL" << endl;
+        std::cout << "FAIL" << std::endl;
 }
 
 
 int main()
 {
-    cout << "========================================" << endl;
-    cout << "       Redis Phase 1 TCP Tests" << endl;
-    cout << "========================================" << endl;
+    std::cout << "========================================" << std::endl;
+    std::cout << "       Redis Phase 1 TCP Tests" << std::endl;
+    std::cout << "========================================" << std::endl;
 
     runTest(
         "Basic TCP exchange",
@@ -433,7 +484,7 @@ int main()
         testReconnect
     );
 
-    cout << "========================================" << endl;
+    std::cout << "========================================" << std::endl;
 
     return 0;
 }

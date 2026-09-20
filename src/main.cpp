@@ -204,6 +204,10 @@ int main(int argc,char *argv[])
                 }
                 else
                     cout<<"Read "<<bytesRead<<" bytes from buffer"<<endl;
+                for(int i = totalBytesRead;i<totalBytesRead+bytesRead;i++)
+                {
+                    std::cout<<readBuffer[i];
+                }
                 totalBytesRead += bytesRead;
                 bytesRemaining = bytesExpected - totalBytesRead;
             }
@@ -259,8 +263,12 @@ int main(int argc,char *argv[])
                         cout<<"Write returned 0 bytes........."<<endl;
                         break;
                     }
-                    totalBytesWritten += bytesWritten;
                     cout<<"Wrote "<<bytesWritten<<" bytes"<<endl;
+                    for(int i = totalBytesWritten;i<totalBytesWritten+bytesWritten;i++)
+                    {
+                        std::cout<<readBuffer[i];
+                    }
+                    totalBytesWritten += bytesWritten;
                 }
             }
         }
