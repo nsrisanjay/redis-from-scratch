@@ -2,6 +2,7 @@
 #include<variant>
 #include<string>
 #include<vector>
+#include <cassert>
 using namespace std;
 
 enum datatTypes {
@@ -33,25 +34,29 @@ struct parseResult{
     int bytesConsumed;
 };
 
-int main()
+parseResult simpleStringParser(const char *bytes,int length)
 {
-    // simple string parser
-    char bytes[] = "+sanzayyy\r\n";
-    // char bytes[] = "+OK\r\n";
     parserResult result;
     respValueStruct respValObject;
     respValObject.respValue = "";
     respValObject.dataType = simpleString;
     parseResult res;
+    if (length == 0)
+    {
+        res.parserRes = INCOMPLETE;
+        res.bytesConsumed = 0;
+        return res;
+    }
     if(bytes[0] != '+')
     {
         result = MALFORMED;
         cout<<"malformed";
-        return 0;
+        res.parserRes = result;
+        return res;
     }
     else{
         int index = 1;
-        int bytesReadByTCPServer = 6;//abitrary value
+        int bytesReadByTCPServer = length;//abitrary value
         while(index < bytesReadByTCPServer){
             if(bytes[index] == '\r')
             {
@@ -86,10 +91,32 @@ int main()
             res.respValue = respValObject;
             res.bytesConsumed = index;
         }
-        cout<<"parsing done"<<endl;
-        cout<<res.bytesConsumed<<endl;
-        cout<<res.respValue.dataType<<endl;
-        cout<<get<string>(res.respValue.respValue)<<endl;
-        cout<<res.parserRes<<endl;
+        // cout<<"parsing done"<<endl;
+        // cout<<res.bytesConsumed<<endl;
+        // cout<<res.respValue.dataType<<endl;
+        // cout<<get<string>(res.respValue.respValue)<<endl;
+        // cout<<res.parserRes<<endl;
     }
+    return res;
 }
+
+int main()
+{
+    char buffer[] = "+OK\r\n+PONG\r\n+HELLO\r\n";
+    // we get this from the tcp server, for now using the arbitrary value;
+    int bufferSize = 20;
+    // simple string parser
+    int totalBytesConsumed = 0;
+    while(totalBytesConsumed < 20)
+    {
+        // get the first result
+        parseResult res = parser(&buffer[totalBytesConsumed],bufferSize-totalBytesConsumed);
+        totalBytesConsumed += res.bytesConsumed;
+    }
+    // testMultipleSimpleStrings();
+}
+
+
+
+
+
