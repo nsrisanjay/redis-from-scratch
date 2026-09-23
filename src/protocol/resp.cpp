@@ -3,7 +3,9 @@
 #include<string>
 #include<vector>
 #include <cassert>
+#include<string.h>
 using namespace std;
+
 
 enum datatTypes {
     simpleString,
@@ -26,13 +28,116 @@ struct respValueStruct{
     // access value if you know the type via tyep value = get<type>(variantValue)
     // we can get by index as well
     // we can get by get_if which returns the address of the value and we can get by dereferencing it.
-    variant<int,string,vector<respValueStruct>>respValue;    
+    variant<monostate,int64_t,string,vector<respValueStruct>>respValue;    
 };
 struct parseResult{
     parserResult parserRes;
     respValueStruct respValue;
     int bytesConsumed;
 };
+
+parseResult bulkStringParser(const char *bytes,int length)
+{
+    parseResult res;
+    respValueStruct respValObject;
+    respValObject.dataType = bulkString;
+    respValObject.respValue = "";
+    // char CRLF[] = "\r\n";
+    res.respValue = respValObject;
+    if(length == 0)
+    {
+        res.parserRes = INCOMPLETE;
+        res.bytesConsumed = 0;
+        // res.parserRes = result;
+        return res;
+    }
+    if(bytes[0] != '$')
+    {
+        res.parserRes = MALFORMED;
+        cout<<"malformed"<<endl;
+        return res;
+    }
+    else{
+
+        int64_t sizeOfStringInBytes = 0;
+        const char* pos = (const char *)memchr(bytes,(int)'\r',(size_t)length);
+
+        if(pos != nullptr && (pos-bytes) < length-1){
+            if(bytes[pos-bytes+1] != '\n')
+            {
+                res.parserRes = MALFORMED;
+                return res;
+            }else{
+                if(pos == bytes+1)
+                {
+                    res.parserRes = MALFORMED;
+                    return res;
+                }
+                // FIX: Handle RESP null bulk string: $-1\r\n
+                if(bytes[1] == '-')
+                {
+                    // $-1 is the only valid negative bulk-string length.
+                    if(pos - bytes != 3 || bytes[2] != '1')
+                    {
+                        res.parserRes = MALFORMED;
+                        return res;
+                    }
+                    // FIX: Represent RESP null using monostate.
+                    res.respValue.respValue = monostate{};
+                    res.parserRes = COMPLETED;
+                    // "$-1\r\n" = 5 bytes
+                    res.bytesConsumed = pos - bytes + 2;
+                    return res;
+                }
+                for(const char *ch=bytes+1;ch<pos;ch++)
+                {
+                    if(isdigit(*ch))
+                        sizeOfStringInBytes  = sizeOfStringInBytes*10 + (*ch-'0');
+                    else{
+                        // not a numeric character, break saying that its malformed
+                        res.parserRes = MALFORMED;
+                        res.bytesConsumed = ch-bytes+1;
+                        return res;
+                    }
+                }
+            }
+        }else{
+            res.parserRes = INCOMPLETE;
+            res.bytesConsumed = length;
+            return res;
+        }
+        // now extract the sizeOfStringInBytes from the pos+2
+        string contentOfBulkString = "";
+        for(const char* ch = pos+2;ch<pos+2+sizeOfStringInBytes;ch++)
+        {
+            if(ch-bytes < length)
+                contentOfBulkString += *ch;
+            else{
+                res.parserRes = INCOMPLETE;
+                res.bytesConsumed = length;
+                return res;
+            }
+        }
+        if(pos + 2 - bytes + sizeOfStringInBytes + 2 > length)
+        {
+            res.parserRes = INCOMPLETE;
+            res.bytesConsumed = length;
+            return res;
+        }
+        if(bytes[pos+2-bytes+sizeOfStringInBytes] == '\r' &&
+            bytes[pos+2-bytes+sizeOfStringInBytes+1] == '\n')
+        {
+            res.parserRes = COMPLETED;
+            res.respValue.respValue = contentOfBulkString;
+            res.bytesConsumed = pos+2-bytes+sizeOfStringInBytes+2;
+            return res;
+        }else{
+            res.parserRes = MALFORMED;
+            return res;
+        }
+    }
+    return res;
+}
 
 parseResult simpleStringParser(const char *bytes,int length)
 {
@@ -107,6 +212,12 @@ parseResult integerParser(const char *bytes,int length){
         res.bytesConsumed = 0;
         return res;
     }
+    if(length == 1)
+    {
+        res.bytesConsumed=1;
+        res.parserRes = INCOMPLETE;
+        return res;
+    }
     if(bytes[0] != ':')
     {
         result = MALFORMED;
@@ -141,7 +252,7 @@ parseResult integerParser(const char *bytes,int length){
                     // '+' + string length + crlf
                     res.bytesConsumed = 1+get<string>(respValObject.respValue).size()+2;
                     // convert to integer after complete value is extracted.
-                    respValObject.respValue = stoi(get<string>(respValObject.respValue));
+                    respValObject.respValue = stoll(get<string>(respValObject.respValue));
                     respValObject.dataType = integers;
                     res.respValue = respValObject;
                     break;
@@ -177,24 +288,45 @@ parseResult integerParser(const char *bytes,int length){
             res.bytesConsumed = index;
         }
     }
-    
-    
     return res;
 }
+
+// int main()
+// {
+//     char buffer[] = "+934\r\n";
+//     // we get this from the tcp server, for now using the arbitrary value;
+//     int bufferSize = sizeof(buffer) - 1;
+//     // simple string parser
+//     int totalBytesConsumed = 0;
+//     while(totalBytesConsumed < bufferSize)
+//     {
+//         // get the first result
+//         parseResult res = integerParser(&buffer[totalBytesConsumed],bufferSize-totalBytesConsumed);
+//         totalBytesConsumed += res.bytesConsumed;
+//     }
+//     // testMultipleSimpleStrings();
+// }
+
 int main()
 {
-    char buffer[] = "+OK\r\n+PONG\r\n+HELLO\r\n";
-    // we get this from the tcp server, for now using the arbitrary value;
-    int bufferSize = 20;
-    // simple string parser
+    char buffer[] = ":934\r\n:123456789\r\n:-42\r\n";
+
+    int bufferSize = sizeof(buffer) - 1;
     int totalBytesConsumed = 0;
-    while(totalBytesConsumed < 20)
+
+    while(totalBytesConsumed < bufferSize)
     {
-        // get the first result
-        parseResult res = parser(&buffer[totalBytesConsumed],bufferSize-totalBytesConsumed);
+        parseResult res = integerParser(
+            &buffer[totalBytesConsumed],
+            bufferSize - totalBytesConsumed
+        );
+
+        assert(res.parserRes == COMPLETED);
+
+        cout << get<int64_t>(res.respValue.respValue) << '\n';
+
         totalBytesConsumed += res.bytesConsumed;
     }
-    // testMultipleSimpleStrings();
 }
 
 
