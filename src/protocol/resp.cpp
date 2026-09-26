@@ -36,6 +36,68 @@ struct parseResult{
     int bytesConsumed;
 };
 
+parseResult errorParser(const char *bytes,int length){
+    parseResult res;
+    respValueStruct respValObject;
+    respValObject.dataType = error;
+    // assume error value as string
+    respValObject.respValue = "";
+    if(length == 0)
+    {
+        res.parserRes = INCOMPLETE;
+        res.bytesConsumed = 0;
+        return res;
+    }
+    if(bytes[0] != '-')
+    {
+        // then malfoemed command
+        res.bytesConsumed = 1;
+        res.parserRes = MALFORMED;
+        return res;
+    }
+    else{
+        // first find pos of the clrf characters.
+        // char CRLF[] = "\r\n";
+        // find the pos of the crlf \r
+        const char* pos = (const char *)memchr(bytes+1,(int)'\r',(size_t)length-1);
+        if(pos == nullptr)
+        {
+            // \r not found so incomplete
+            res.parserRes = INCOMPLETE;
+            res.bytesConsumed = length;
+            return res;
+        }else{
+            // found the \r char at position now check if the next char is \n or is the \r is the last byte
+            if(pos-bytes == length-1)
+            {
+                // then it means last charcter is the \r which means incomplete request
+                res.parserRes = INCOMPLETE;
+                res.bytesConsumed = length;
+                return res;
+            }else if(bytes[pos-bytes+1] != '\n')
+            {
+                // then some other chracter after the \r then request is malformed
+                res.parserRes = MALFORMED;
+                return res;
+            }
+            else{
+                // \r\n bothe are present in the curent request itself
+                // extract the error message
+                string errorMessage = "";
+                for(const char *ch= bytes + 1;ch<pos;ch++)
+                {
+                    errorMessage += *ch;
+                }
+                respValObject.respValue = errorMessage;
+                res.respValue = respValObject;
+                res.parserRes = COMPLETED;
+                res.bytesConsumed = pos-bytes+2;
+                return res;
+            }
+        }
+    }
+}
+
 parseResult bulkStringParser(const char *bytes,int length)
 {
     parseResult res;
