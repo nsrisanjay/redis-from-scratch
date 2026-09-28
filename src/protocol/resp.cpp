@@ -4,8 +4,8 @@
 #include<vector>
 #include <cassert>
 #include<string.h>
-using namespace std;
 
+using namespace std;
 
 enum datatTypes {
     simpleString,
@@ -36,6 +36,13 @@ struct parseResult{
     int bytesConsumed;
 };
 
+parseResult integerParser(const char* bytes, int length);
+parseResult simpleStringParser(const char* bytes, int length);
+parseResult bulkStringParser(const char* bytes, int length);
+parseResult errorParser(const char* bytes, int length);
+parseResult arrayParser(const char* bytes, int length);
+
+
 // helper functions
 int dynamicPointerMover(parseResult parserResult,vector<respValueStruct> &vectorStore,char **dynamicPosition)
 {
@@ -45,11 +52,21 @@ int dynamicPointerMover(parseResult parserResult,vector<respValueStruct> &vector
         return 1;
     else{
         // move the dynamicPosition pointer to the next element starting position.
-        dynamicPosition += parserResult.bytesConsumed;
+        *dynamicPosition += parserResult.bytesConsumed;
         // extract the number stored in respValue and add it to the vector
         vectorStore.push_back(parserResult.respValue);
     }
     return 2;
+}
+
+bool nullArrayChecker(const char *bytes, int length)
+{
+    if(length < 5)
+        return false;
+    if(bytes[0] == '*' && bytes[1] == '-' &&
+       bytes[2] == '1' && bytes[3] == '\r' && bytes[4] == '\n')
+        return true;
+    return false;
 }
 
 parseResult arrayParser(const char* bytes,int length)
@@ -61,6 +78,7 @@ parseResult arrayParser(const char* bytes,int length)
     vector<respValueStruct> vectorStore;
 
     respValObject.dataType = datatTypes::array;
+    
     if (length == 0)
     {
         res.parserRes = INCOMPLETE;
@@ -71,6 +89,14 @@ parseResult arrayParser(const char* bytes,int length)
     {
         res.bytesConsumed = 1;
         res.parserRes = MALFORMED;
+        return res;
+    }
+    if(nullArrayChecker(bytes,length))
+    {
+        res.bytesConsumed = 5;
+        res.parserRes = COMPLETED;
+        respValObject.respValue = monostate{};
+        res.respValue = respValObject;
         return res;
     }
     else{
@@ -102,6 +128,12 @@ parseResult arrayParser(const char* bytes,int length)
         else{
             // means \r\n both are pressent and the request is complete
             // compute the number of elements in the array
+            if(pos == bytes+1)
+            {
+                res.parserRes = MALFORMED;
+                res.bytesConsumed = 1;
+                return res;
+            }
             for(const char*ch = bytes+1;ch<pos;ch++)
             {
                 if(isdigit(*ch))
@@ -114,7 +146,6 @@ parseResult arrayParser(const char* bytes,int length)
                 return res;
             }
             // now parse the incoming numberOfelements Lines
-            int count = 0;
             char *initPos = pos+2;
             char *dynamicPosition = initPos;
             while(numberOfElements--)
@@ -147,7 +178,7 @@ parseResult arrayParser(const char* bytes,int length)
                     }
                     // if element is a bulk string
                     case '$':
-                        {
+                    {
                             int newLength = length - (dynamicPosition - bytes);
                             parseResult parserResult = bulkStringParser(dynamicPosition, newLength);
                             int status = dynamicPointerMover(parserResult, vectorStore, &dynamicPosition);
@@ -156,12 +187,24 @@ parseResult arrayParser(const char* bytes,int length)
                             else if (status == 1)
                                 return parserResult;
                             break;
-                        }
+                    }
                     // if element is another array (nested arrays)
                     case '*':
                     {
                         int newLength = length - (dynamicPosition - bytes);
                         parseResult parserResult = arrayParser(dynamicPosition, newLength);
+                        int status = dynamicPointerMover(parserResult, vectorStore, &dynamicPosition);
+                        if (status == 0)
+                            return parserResult;
+                        else if (status == 1)
+                            return parserResult;
+                        break;
+                    }
+                    // if lement is of type error
+                    case '-':
+                    {
+                        int newLength = length - (dynamicPosition - bytes);
+                        parseResult parserResult = errorParser(dynamicPosition, newLength);
                         int status = dynamicPointerMover(parserResult, vectorStore, &dynamicPosition);
                         if (status == 0)
                             return parserResult;
@@ -178,6 +221,12 @@ parseResult arrayParser(const char* bytes,int length)
                     }
                 }
             }
+            res.bytesConsumed = dynamicPosition - bytes;;
+            res.parserRes = COMPLETED;
+            respValObject.respValue = vectorStore;
+            res.respValue = respValObject;
+            return res;
+            
         }
     }
 }
@@ -494,22 +543,6 @@ parseResult integerParser(const char *bytes,int length){
     return res;
 }
 
-// int main()
-// {
-//     char buffer[] = "+934\r\n";
-//     // we get this from the tcp server, for now using the arbitrary value;
-//     int bufferSize = sizeof(buffer) - 1;
-//     // simple string parser
-//     int totalBytesConsumed = 0;
-//     while(totalBytesConsumed < bufferSize)
-//     {
-//         // get the first result
-//         parseResult res = integerParser(&buffer[totalBytesConsumed],bufferSize-totalBytesConsumed);
-//         totalBytesConsumed += res.bytesConsumed;
-//     }
-//     // testMultipleSimpleStrings();
-// }
-
 int main()
 {
     char buffer[] = ":934\r\n:123456789\r\n:-42\r\n";
@@ -525,9 +558,8 @@ int main()
         );
 
         assert(res.parserRes == COMPLETED);
-
         cout << get<int64_t>(res.respValue.respValue) << '\n';
-
         totalBytesConsumed += res.bytesConsumed;
     }
 }
+
