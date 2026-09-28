@@ -36,7 +36,154 @@ struct parseResult{
     int bytesConsumed;
 };
 
-parseResult errorParser(const char *bytes,int length){
+// helper functions
+int dynamicPointerMover(parseResult parserResult,vector<respValueStruct> &vectorStore,char **dynamicPosition)
+{
+    if(parserResult.parserRes == INCOMPLETE)
+        return 0;
+    else if(parserResult.parserRes == MALFORMED)
+        return 1;
+    else{
+        // move the dynamicPosition pointer to the next element starting position.
+        dynamicPosition += parserResult.bytesConsumed;
+        // extract the number stored in respValue and add it to the vector
+        vectorStore.push_back(parserResult.respValue);
+    }
+    return 2;
+}
+
+parseResult arrayParser(const char* bytes,int length)
+{
+    parseResult res;
+    respValueStruct respValObject;
+
+    // store vector elements here in this vector
+    vector<respValueStruct> vectorStore;
+
+    respValObject.dataType = datatTypes::array;
+    if (length == 0)
+    {
+        res.parserRes = INCOMPLETE;
+        res.bytesConsumed = 0;
+        return res;
+    }
+    if(bytes[0] != '*')
+    {
+        res.bytesConsumed = 1;
+        res.parserRes = MALFORMED;
+        return res;
+    }
+    else{
+        //if bytes[1] is not a number telling us how ,many elements in the array
+        int64_t numberOfElements = 0;
+        char* pos = (char*)memchr(bytes+1,static_cast<int>('\r'),static_cast<size_t>(length-1));
+        if(pos == nullptr)
+        {
+            // means that the the \r is not found
+            res.bytesConsumed = length; // all bytes consumed
+            res.parserRes = INCOMPLETE;
+            return res;
+        }
+        else if(pos-bytes == length-1)
+        {
+            // this means that the the character is found at the end of the string
+            // res.parserRes would be incomeplete
+            res.bytesConsumed = pos-bytes+1;
+            res.parserRes = INCOMPLETE;
+            return res;
+        }
+        else if(*(pos+1) != '\n')
+        {
+            // request is malfoprmed something after the \r
+            res.parserRes = MALFORMED;
+            res.bytesConsumed = -1*(bytes-pos)+2;
+            return res;
+        }
+        else{
+            // means \r\n both are pressent and the request is complete
+            // compute the number of elements in the array
+            for(const char*ch = bytes+1;ch<pos;ch++)
+            {
+                if(isdigit(*ch))
+                {
+                    numberOfElements = numberOfElements*10 + (*ch - '0');
+                    continue;
+                }
+                // malformed request
+                res.parserRes = MALFORMED;
+                return res;
+            }
+            // now parse the incoming numberOfelements Lines
+            int count = 0;
+            char *initPos = pos+2;
+            char *dynamicPosition = initPos;
+            while(numberOfElements--)
+            {
+                char ch = *dynamicPosition;
+                switch(ch){
+                    // if element is integer
+                    case ':':
+                    {
+                        int newLength = length - (dynamicPosition - bytes);
+                        parseResult parserResult = integerParser(dynamicPosition, newLength);
+                        int status = dynamicPointerMover(parserResult, vectorStore, &dynamicPosition);
+                        if (status == 0)
+                            return parserResult;
+                        else if (status == 1)
+                            return parserResult;
+                        break;
+                    }
+                    // if element is simple string
+                    case '+':
+                    {
+                        int newLength = length - (dynamicPosition - bytes);
+                        parseResult parserResult = simpleStringParser(dynamicPosition, newLength);
+                        int status = dynamicPointerMover(parserResult, vectorStore, &dynamicPosition);
+                        if (status == 0)
+                            return parserResult;
+                        else if (status == 1)
+                            return parserResult;
+                        break;
+                    }
+                    // if element is a bulk string
+                    case '$':
+                        {
+                            int newLength = length - (dynamicPosition - bytes);
+                            parseResult parserResult = bulkStringParser(dynamicPosition, newLength);
+                            int status = dynamicPointerMover(parserResult, vectorStore, &dynamicPosition);
+                            if (status == 0)
+                                return parserResult;
+                            else if (status == 1)
+                                return parserResult;
+                            break;
+                        }
+                    // if element is another array (nested arrays)
+                    case '*':
+                    {
+                        int newLength = length - (dynamicPosition - bytes);
+                        parseResult parserResult = arrayParser(dynamicPosition, newLength);
+                        int status = dynamicPointerMover(parserResult, vectorStore, &dynamicPosition);
+                        if (status == 0)
+                            return parserResult;
+                        else if (status == 1)
+                            return parserResult;
+                        break;
+                    }
+                    // if no matching elemetn tyoe return a malformed reques
+                    default:
+                    {
+                        res.parserRes = MALFORMED;
+                        res.bytesConsumed = 1;
+                        return res;
+                    }
+                }
+            }
+        }
+    }
+}
+
+parseResult errorParser(const char *bytes,int length)
+{
     parseResult res;
     respValueStruct respValObject;
     respValObject.dataType = error;
@@ -266,18 +413,12 @@ parseResult integerParser(const char *bytes,int length){
     parserResult result;
     respValueStruct respValObject;
     respValObject.respValue = "";
-    respValObject.dataType = simpleString;
+    respValObject.dataType = integers;
     parseResult res;
     if (length == 0)
     {
         res.parserRes = INCOMPLETE;
         res.bytesConsumed = 0;
-        return res;
-    }
-    if(length == 1)
-    {
-        res.bytesConsumed=1;
-        res.parserRes = INCOMPLETE;
         return res;
     }
     if(bytes[0] != ':')
@@ -390,8 +531,3 @@ int main()
         totalBytesConsumed += res.bytesConsumed;
     }
 }
-
-
-
-
-
