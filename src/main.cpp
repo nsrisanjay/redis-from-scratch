@@ -7,6 +7,7 @@
 #include<vector>
 #include<csignal>
 
+#include "protocol/resp_protocol.hpp"
 
 using namespace std;
 
@@ -114,6 +115,8 @@ int main(int argc,char *argv[])
         sockaddr_in peerSocket;
         socklen_t peerSocketLength = sizeof(peerSocket);
         int newSocket = accept(fileDescriptor,(struct sockaddr *)&peerSocket,&peerSocketLength);
+        // this insatnce belongs to that particular client
+        RespProtocol protocol(4096);
         bool skipClient = false;
         if(SIGINT_SIGNAL == 1)
             break;
@@ -202,12 +205,17 @@ int main(int argc,char *argv[])
                     skipClient = true;
                     break;
                 }
+                // else
+                //     cout<<"Read "<<bytesRead<<" bytes from buffer"<<endl;
                 else
-                    cout<<"Read "<<bytesRead<<" bytes from buffer"<<endl;
-                for(int i = totalBytesRead;i<totalBytesRead+bytesRead;i++)
                 {
-                    std::cout<<readBuffer[i];
+                    cout<<"Read "<<bytesRead<<" bytes from buffer"<<endl;
+                    protocol.feed(&readBuffer[totalBytesRead],bytesRead);
                 }
+                // for(int i = totalBytesRead;i<totalBytesRead+bytesRead;i++)
+                // {
+                //     std::cout<<readBuffer[i];
+                // }
                 totalBytesRead += bytesRead;
                 bytesRemaining = bytesExpected - totalBytesRead;
             }
