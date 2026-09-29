@@ -132,7 +132,6 @@ bool receiveAll(int socketFd, vector<char>& data, int expectedBytes)
     return true;
 }
 
-
 bool verifyEcho(
     const vector<char>& sent,
     const vector<char>& received
@@ -292,6 +291,39 @@ bool testPartialRead()
     return verifyEcho(data, receivedData);
 }
 
+bool testLargePayload()
+{
+    int socketFd;
+
+    if(!connectToServer(socketFd))
+        return false;
+
+    const int payloadSize = 4096;
+
+    vector<char> sentData(payloadSize, 'L');
+
+    if(!sendAll(socketFd, sentData))
+    {
+        close(socketFd);
+        return false;
+    }
+
+    vector<char> receivedData;
+
+    if(!receiveAll(
+        socketFd,
+        receivedData,
+        payloadSize
+    ))
+    {
+        close(socketFd);
+        return false;
+    }
+
+    close(socketFd);
+
+    return verifyEcho(sentData, receivedData);
+}
 
 bool testUnexpectedDisconnect()
 {
@@ -469,6 +501,11 @@ int main()
         testPartialRead
     );
 
+    runTest(
+    "Large payload",
+    testLargePayload
+    );
+    
     runTest(
         "Unexpected client disconnect",
         testUnexpectedDisconnect

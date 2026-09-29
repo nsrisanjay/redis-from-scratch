@@ -12,7 +12,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(redis-server
     src/main.cpp
     src/protocol/resp.cpp
-    src/protocol/resp+protocol.cpp
+    src/protocol/resp_protocol.cpp
 )
 
 target_include_directories(redis-server PRIVATE
