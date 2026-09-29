@@ -5,43 +5,11 @@
 #include <cassert>
 #include<string.h>
 
+// include from .hpp files
+#include "protocol/resp_types.hpp"
+#include "protocol/resp_parser.hpp"
+
 using namespace std;
-
-enum datatTypes {
-    simpleString,
-    bulkString,
-    integers,
-    array,
-    error
-};
-
-enum parserResult{
-    COMPLETED,
-    INCOMPLETE,
-    MALFORMED
-};
-
-struct respValueStruct{
-    datatTypes dataType;
-    
-    // dynamic allocation of datatype.
-    // access value if you know the type via tyep value = get<type>(variantValue)
-    // we can get by index as well
-    // we can get by get_if which returns the address of the value and we can get by dereferencing it.
-    variant<monostate,int64_t,string,vector<respValueStruct>>respValue;    
-};
-struct parseResult{
-    parserResult parserRes;
-    respValueStruct respValue;
-    int bytesConsumed;
-};
-
-parseResult integerParser(const char* bytes, int length);
-parseResult simpleStringParser(const char* bytes, int length);
-parseResult bulkStringParser(const char* bytes, int length);
-parseResult errorParser(const char* bytes, int length);
-parseResult arrayParser(const char* bytes, int length);
-
 
 // helper functions
 int dynamicPointerMover(parseResult parserResult,vector<respValueStruct> &vectorStore,char **dynamicPosition)
@@ -541,25 +509,5 @@ parseResult integerParser(const char *bytes,int length){
         }
     }
     return res;
-}
-
-int main()
-{
-    char buffer[] = ":934\r\n:123456789\r\n:-42\r\n";
-
-    int bufferSize = sizeof(buffer) - 1;
-    int totalBytesConsumed = 0;
-
-    while(totalBytesConsumed < bufferSize)
-    {
-        parseResult res = integerParser(
-            &buffer[totalBytesConsumed],
-            bufferSize - totalBytesConsumed
-        );
-
-        assert(res.parserRes == COMPLETED);
-        cout << get<int64_t>(res.respValue.respValue) << '\n';
-        totalBytesConsumed += res.bytesConsumed;
-    }
 }
 

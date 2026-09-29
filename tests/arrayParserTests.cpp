@@ -1,9 +1,13 @@
+#include <iostream>
+#include<cassert>
+
+#include "protocol/resp_parser.hpp"
+
+using namespace std;
+
+
 void testArrayParser()
 {
-    // ============================================================
-    // 1. EMPTY ARRAY
-    // ============================================================
-
     {
         char buffer[] = "*0\r\n";
 
@@ -16,11 +20,6 @@ void testArrayParser()
         assert(res.bytesConsumed == 4);
     }
 
-
-    // ============================================================
-    // 2. NULL ARRAY
-    // ============================================================
-
     {
         char buffer[] = "*-1\r\n";
 
@@ -32,11 +31,6 @@ void testArrayParser()
                    res.respValue.respValue));
         assert(res.bytesConsumed == 5);
     }
-
-
-    // ============================================================
-    // 3. ARRAY WITH ONE INTEGER
-    // ============================================================
 
     {
         char buffer[] = "*1\r\n:42\r\n";
@@ -56,10 +50,6 @@ void testArrayParser()
         assert(res.bytesConsumed == 9);
     }
 
-
-    // ============================================================
-    // 4. ARRAY WITH MULTIPLE INTEGERS
-    // ============================================================
 
     {
         char buffer[] =
@@ -533,7 +523,12 @@ void testArrayParser()
         assert(values[3].dataType == error);
         assert(values[4].dataType == ::array);
     }
+}
 
 
-    cout << "All array parser tests passed!" << endl;
+int main()
+{
+    testArrayParser();
+    cout<<"all array tests passsed!!!"<<endl;
+    return 0;
 }
