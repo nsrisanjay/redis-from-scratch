@@ -45,7 +45,7 @@ parseResult arrayParser(const char* bytes,int length)
     // store vector elements here in this vector
     vector<respValueStruct> vectorStore;
 
-    respValObject.dataType = datatTypes::array;
+    respValObject.dataType = datatTypes::respArray;
     
     if (length == 0)
     {

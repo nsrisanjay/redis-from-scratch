@@ -11,7 +11,7 @@ enum datatTypes {
     simpleString,
     bulkString,
     integers,
-    array,
+    respArray,
     error
 };
 

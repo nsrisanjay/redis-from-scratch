@@ -14,7 +14,7 @@ void testArrayParser()
         parseResult res = arrayParser(buffer, sizeof(buffer) - 1);
 
         assert(res.parserRes == COMPLETED);
-        assert(res.respValue.dataType == ::array);
+        assert(res.respValue.dataType == ::respArray);
         assert(get<vector<respValueStruct>>(
                    res.respValue.respValue).empty());
         assert(res.bytesConsumed == 4);
@@ -26,7 +26,7 @@ void testArrayParser()
         parseResult res = arrayParser(buffer, sizeof(buffer) - 1);
 
         assert(res.parserRes == COMPLETED);
-        assert(res.respValue.dataType == ::array);
+        assert(res.respValue.dataType == ::respArray);
         assert(holds_alternative<monostate>(
                    res.respValue.respValue));
         assert(res.bytesConsumed == 5);
@@ -38,7 +38,7 @@ void testArrayParser()
         parseResult res = arrayParser(buffer, sizeof(buffer) - 1);
 
         assert(res.parserRes == COMPLETED);
-        assert(res.respValue.dataType == ::array);
+        assert(res.respValue.dataType == ::respArray);
 
         auto values =
             get<vector<respValueStruct>>(res.respValue.respValue);
@@ -177,7 +177,7 @@ void testArrayParser()
         assert(outer.size() == 2);
 
         // First element is an array
-        assert(outer[0].dataType == ::array);
+        assert(outer[0].dataType == ::respArray);
 
         auto inner =
             get<vector<respValueStruct>>(outer[0].respValue);
@@ -187,7 +187,7 @@ void testArrayParser()
         assert(get<int64_t>(inner[1].respValue) == 2);
 
         // Second element is another array
-        assert(outer[1].dataType == ::array);
+        assert(outer[1].dataType == ::respArray);
 
         auto inner2 =
             get<vector<respValueStruct>>(outer[1].respValue);
@@ -521,7 +521,7 @@ void testArrayParser()
         assert(values[1].dataType == simpleString);
         assert(values[2].dataType == bulkString);
         assert(values[3].dataType == error);
-        assert(values[4].dataType == ::array);
+        assert(values[4].dataType == ::respArray);
     }
 }
 
