@@ -3,15 +3,23 @@
 
 #include <iostream>
 #include <cstring>
+#include <limits>
+#include<queue>
+
 
 using namespace std;
 
 RespProtocol::RespProtocol(int capacity)
 {
-    this->capacity = capacity;
-    this->buffer = new char[capacity];
+    this->capacity = capacity > 0 ? capacity : 1;
+    this->buffer = new char[this->capacity];
     this->bytesInBuffer = 0;
     this->startIndex = 0;
+}
+
+bool RespProtocol::hasError() const
+{
+    return protocolError;
 }
 
 RespProtocol::~RespProtocol()
@@ -19,33 +27,64 @@ RespProtocol::~RespProtocol()
     delete[] buffer;
 }
 
+bool RespProtocol::hasValue()
+{
+    return !completedValues.empty();
+}
+
+respValueStruct RespProtocol::getValue()
+{
+    respValueStruct value = completedValues.front();
+    completedValues.pop();
+
+    return value;
+}
+
 void RespProtocol::feed(const char* bytes, int length)
 {
-    // Incoming data itself is larger than the entire buffer.
-    if(length > capacity)
+    if (protocolError || length < 0)
     {
-        cout<<"Input too large for buffer"<<endl;
+        protocolError = true;
         return;
     }
 
-    // Check whether the new data fits in the remaining buffer space.
-    if(bytesInBuffer + length > capacity)
+    // Number of unprocessed bytes currently in the buffer.
+    int remainingBytes = bytesInBuffer - startIndex;
+    if (startIndex > 0)
     {
-        // Number of unprocessed bytes currently in the buffer.
-        int remainingBytes = bytesInBuffer - startIndex;
-        // Move unprocessed bytes to the beginning of the buffer.(compaction)
-        // returns void *
-        // memmove(destination pointer,source pointer,no.of bytes to move from src pointer to dest pointer)
-        memmove(buffer,buffer + startIndex,remainingBytes);
+        // Move unprocessed bytes to the beginning of the buffer (compaction).
+        // memmove(destination, source, number of bytes to move).
+        memmove(buffer, buffer + startIndex, remainingBytes);
         bytesInBuffer = remainingBytes;
         startIndex = 0;
+    }
 
-        // Even after compaction, the new data must fit.
-        if(bytesInBuffer + length > capacity)
+    if (length > numeric_limits<int>::max() - bytesInBuffer)
+    {
+        protocolError = true;
+        return;
+    }
+
+    // Even after compaction, make sure the new data fits by growing the buffer.
+    int requiredCapacity = bytesInBuffer + length;
+    if (requiredCapacity > capacity)
+    {
+        int newCapacity = capacity;
+        while (newCapacity < requiredCapacity)
         {
-            cout<<"Buffer is full"<<endl;
-            return;
+            if (newCapacity > numeric_limits<int>::max() / 2)
+            {
+                newCapacity = requiredCapacity;
+                break;
+            }
+            newCapacity *= 2;
         }
+
+        char* newBuffer = new char[newCapacity];
+        memcpy(newBuffer, buffer, bytesInBuffer);
+        delete[] buffer;
+        buffer = newBuffer;
+        capacity = newCapacity;
     }
 
     // Append newly received TCP bytes.
@@ -78,17 +117,21 @@ void RespProtocol::feed(const char* bytes, int length)
                 break;
             default:
                 cout << "Protocol error" << endl;
+                protocolError = true;
                 return;
         }
 
         if(res.parserRes == COMPLETED)
         {
+            // pus h the resp value into the queue
+            completedValues.push(res.respValue);
             // Mark these bytes as processed.
             startIndex += res.bytesConsumed;
 
             // TODO:
             // Do something with res.respValue.
-            // cout<<"completed parsing the message"<<endl;
+            cout<<"completed parsing the message adn returning the resp value : "<<endl;
+
         }
         else if(res.parserRes == INCOMPLETE)
         {
@@ -99,7 +142,8 @@ void RespProtocol::feed(const char* bytes, int length)
         }
         else if(res.parserRes == MALFORMED)
         {
-            // cout << "Protocol error" << endl;
+            cout << "Protocol error" << endl;
+            protocolError = true;
             return;
         }
     }

@@ -8,6 +8,7 @@
 #include <csignal>
 
 #include "protocol/resp_protocol.hpp"
+#include "protocol/resp_serializer.hpp"
 
 using namespace std;
 
@@ -152,9 +153,11 @@ int main(int argc, char *argv[])
             char readBuffer[1024];
             // int bytesExpected = 200;
             // int bytesRemaining = bytesExpected;
-            int totalBytesRead = 0;
             while (skipClient != true)
             {
+                string responseBytes;
+                bool protocolFailed = false;
+                bool clientConnectionClosed = false;
                 int bytesRead = read(newSocket, &readBuffer, sizeof(readBuffer));
 
                 if (bytesRead == -1)
@@ -221,27 +224,36 @@ int main(int argc, char *argv[])
                 else
                 {
                     cout << "Read " << bytesRead << " bytes from buffer" << endl;
-                    totalBytesRead = bytesRead;
+
                     protocol.feed(readBuffer, bytesRead);
+                    if (protocol.hasError())
+                    {
+                        respValueStruct protocolErrorResponse;
+                        protocolErrorResponse.dataType = error;
+                        protocolErrorResponse.respValue = string("ERR Protocol error");
+                        responseBytes += serializer(protocolErrorResponse);
+                        protocolFailed = true;
+
+                        
+                    }
+                    else
+                    {
+                        while (protocol.hasValue())
+                        {
+                            respValueStruct request = protocol.getValue();
+                            responseBytes += serializer(request);
+                        }
+                    }
                 }
-                // for(int i = totalBytesRead;i<totalBytesRead+bytesRead;i++)
-                // {
-                //     std::cout<<readBuffer[i];
-                // }
-                // totalBytesRead += bytesRead;
-                // bytesRemaining = bytesExpected - totalBytesRead;
-
-                // process bytes which are read, some logic can come later................
-
                 // write from buffer to client .........................................................................
                 if (skipClient != true)
                 {
-                    int totalBytesToWrite = totalBytesRead;
-                    int totalBytesWritten = 0;
+                    size_t totalBytesWritten = 0;
+                    size_t totalBytesToWrite = responseBytes.size();
                     while (totalBytesWritten < totalBytesToWrite)
                     {
-                        int bytesRemainingToWrite = totalBytesToWrite - totalBytesWritten;
-                        int bytesWritten = write(newSocket, &readBuffer[totalBytesWritten], bytesRemainingToWrite);
+                        size_t bytesRemainingToWrite = totalBytesToWrite - totalBytesWritten;
+                        ssize_t bytesWritten = write(newSocket,responseBytes.data() + totalBytesWritten,bytesRemainingToWrite);
                         if (bytesWritten == -1)
                         {
                             if (errno == EINTR)
@@ -269,6 +281,7 @@ int main(int argc, char *argv[])
                             }
                             // close the client connection
                             int status = close(newSocket);
+                            clientConnectionClosed = true;
                             if (status == 0)
                                 cout << "close client connection successfully.........." << endl;
                             else
@@ -286,12 +299,30 @@ int main(int argc, char *argv[])
                             break;
                         }
                         cout << "Wrote " << bytesWritten << " bytes" << endl;
-                        for (int i = totalBytesWritten; i < totalBytesWritten + bytesWritten; i++)
-                        {
-                            std::cout << readBuffer[i];
-                        }
-                        totalBytesWritten += bytesWritten;
+                        totalBytesWritten += static_cast<size_t>(bytesWritten);
                     }
+                }
+
+                if (protocolFailed)
+                {
+                    for (auto it = clientsInfo.begin(); it < clientsInfo.end(); it++)
+                    {
+                        if (it->fileDescriptor == newSocket)
+                        {
+                            clientsInfo.erase(it);
+                            break;
+                        }
+                    }
+
+                    if (!clientConnectionClosed)
+                    {
+                        int status = close(newSocket);
+                        if (status == 0)
+                            cout << "close client connection successfully.........." << endl;
+                        else
+                            cout << "error closing client connection : " << strerror(errno) << endl;
+                    }
+                    skipClient = true;
                 }
             }
         }
