@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
 
     // htons converts the port number to network byte order(big-endian)
     socketBindVars.sin_port = htons(port_number);
-    // INADDR_ANY  basically represents 0.0.0.0 ie listen from any netwrok interfaces
+    // INADDR_ANY  basically represents 0.0.0.0 ie listen from any network interfaces
     socketBindVars.sin_addr.s_addr = htonl(INADDR_ANY);
 
     // socket length in bytes
