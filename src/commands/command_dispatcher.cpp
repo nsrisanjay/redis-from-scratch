@@ -2,12 +2,21 @@
 #include<cctype>
 #include "commands/command_dispatcher.hpp"
 #include "protocol/resp_types.hpp"
-#include "commands/command_handler.hpp"
 
 using namespace std;
 
 const string INVALID_COMMAND_STRING = "Invalid command";
 const string NO_COMMAND = "Null command";
+const string UNKNOWN_COMMAND_STRING = "Unknown command";
+// helper function
+respValueStruct makeUnknownCommandError(const respValueStruct request){
+
+    respValueStruct response;
+    response.dataType = error;
+    response.respValue = UNKNOWN_COMMAND_STRING;
+    return response;
+
+}
 
 commandDispatcher::commandDispatcher(Keyspace &store){
         // address of the keyspace stored inside the member *keyspace
@@ -59,21 +68,20 @@ respValueStruct commandDispatcher :: execute(const respValueStruct &request){
                 c = std::tolower(static_cast<unsigned char>(c));
             }
             if (opCommand == "ping")
-                return handlePing(arguments);
+                return handlePing((const respValueStruct)request,keyspace);
             else if (opCommand == "set")
-                return handleSet(arguments, *keyspace);
+                return handleSet((const respValueStruct)request,keyspace);
             else if (opCommand == "get")
-                return handleGet(arguments, *keyspace);
+                return handleGet((const respValueStruct)request,keyspace);
             else if (opCommand == "del")
-                return handleDel(arguments, *keyspace);
+                return handleDel((const respValueStruct)request,keyspace);
             else if (opCommand == "exists")
-                return handleExists(arguments, *keyspace);
+                return handleExists((const respValueStruct)request,keyspace);
             else if (opCommand == "type")
-                return handleType(arguments, *keyspace);
+                return handleType((const respValueStruct)request,keyspace);
             else if (opCommand == "dbsize")
-                return handleDbsize(arguments, *keyspace);
-
-            return makeUnknownCommandError(opCommand);
+                return handleDbSize((const respValueStruct)request,keyspace);
+            return makeUnknownCommandError((const respValueStruct)request);
         }else{
             // the request's respvalue is not null or not a vector, must be some otther type
             // error invalid command
