@@ -68,7 +68,7 @@ respValueStruct commandDispatcher :: execute(const respValueStruct &request){
                 c = std::tolower(static_cast<unsigned char>(c));
             }
             if (opCommand == "ping")
-                return handlePing((const respValueStruct)request,keyspace);
+                return handlePing((const respValueStruct)request);
             else if (opCommand == "set")
                 return handleSet((const respValueStruct)request,keyspace);
             else if (opCommand == "get")

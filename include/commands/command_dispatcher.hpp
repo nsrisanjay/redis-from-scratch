@@ -8,7 +8,7 @@ class commandDispatcher{
     commandDispatcher(Keyspace &store);
     private:
     Keyspace *keyspace;
-    respValueStruct handlePing(const respValueStruct &request, Keyspace *keyspace);
+    respValueStruct handlePing(const respValueStruct &request);
     respValueStruct handleSet(const respValueStruct &request, Keyspace *keyspace);
     respValueStruct handleGet(const respValueStruct &request, Keyspace *keyspace);
     respValueStruct handleDel(const respValueStruct &request, Keyspace *keyspace);
