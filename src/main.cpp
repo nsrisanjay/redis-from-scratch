@@ -82,6 +82,9 @@ int main(int argc, char *argv[])
     }
 
     // htons converts the port number to network byte order(big-endian)
+    // some CPUs may use little endian notation while sending bytes over the network
+    // but the network only accepts big endian notation
+    // htons converts this format to big endian format
     socketBindVars.sin_port = htons(port_number);
     // INADDR_ANY  basically represents 0.0.0.0 ie listen from any network interfaces
     socketBindVars.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -224,20 +227,23 @@ int main(int argc, char *argv[])
                 else
                 {
                     cout << "Read " << bytesRead << " bytes from buffer" << endl;
+                    
 
+                    // if any error, sets the bool protocolError to true;
                     protocol.feed(readBuffer, bytesRead);
+                    // gets caught in the next if block
                     if (protocol.hasError())
                     {
+                        // if protocol error(error in sending the commands)
                         respValueStruct protocolErrorResponse;
                         protocolErrorResponse.dataType = error;
                         protocolErrorResponse.respValue = string("ERR Protocol error");
                         responseBytes += serializer(protocolErrorResponse);
                         protocolFailed = true;
-
-                        
                     }
                     else
                     {
+                        // process the commands from queue
                         while (protocol.hasValue())
                         {
                             respValueStruct request = protocol.getValue();
@@ -253,6 +259,8 @@ int main(int argc, char *argv[])
                     while (totalBytesWritten < totalBytesToWrite)
                     {
                         size_t bytesRemainingToWrite = totalBytesToWrite - totalBytesWritten;
+                        // .data return pointer to the 1st character of the string
+                        // write from the position of new bytes to write which is buffer[0] + totalBytesWritten
                         ssize_t bytesWritten = write(newSocket,responseBytes.data() + totalBytesWritten,bytesRemainingToWrite);
                         if (bytesWritten == -1)
                         {
