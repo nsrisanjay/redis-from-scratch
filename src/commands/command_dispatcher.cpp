@@ -9,7 +9,7 @@ const string INVALID_COMMAND_STRING = "Invalid command";
 const string NO_COMMAND = "Null command";
 const string UNKNOWN_COMMAND_STRING = "Unknown command";
 // helper function
-respValueStruct makeUnknownCommandError(const respValueStruct request){
+respValueStruct makeUnknownCommandError(){
 
     respValueStruct response;
     response.dataType = error;
@@ -81,7 +81,7 @@ respValueStruct commandDispatcher :: execute(const respValueStruct &request){
                 return handleType((const respValueStruct)request,keyspace);
             else if (opCommand == "dbsize")
                 return handleDbSize((const respValueStruct)request,keyspace);
-            return makeUnknownCommandError((const respValueStruct)request);
+            return makeUnknownCommandError();
         }else{
             // the request's respvalue is not null or not a vector, must be some otther type
             // error invalid command

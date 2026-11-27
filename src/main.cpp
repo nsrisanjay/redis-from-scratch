@@ -9,6 +9,8 @@
 
 #include "protocol/resp_protocol.hpp"
 #include "protocol/resp_serializer.hpp"
+#include "commands/command_dispatcher.hpp"
+#include "storage/keyspace.hpp"
 
 using namespace std;
 
@@ -119,6 +121,11 @@ int main(int argc, char *argv[])
     // accept connections on a while loop
     // initialise a vector of struct connectedClientInfo
     vector<connectedClientsInfo> clientsInfo;
+    // create a keyspace and command_dispatcher objects for the clients to use
+
+    Keyspace keyspace = Keyspace();
+    // pass this same instance of keyspace to comamnd_dispatcher costructor
+    commandDispatcher dispatcher = commandDispatcher(keyspace);
     while (true)
     {
         // pass in empty addr and socklen for the OS to fill them in
@@ -246,8 +253,13 @@ int main(int argc, char *argv[])
                         // process the commands from queue
                         while (protocol.hasValue())
                         {
+                            // get request from queue
                             respValueStruct request = protocol.getValue();
-                            responseBytes += serializer(request);
+                            // send the request to the command dispatcher
+                            respValueStruct response = dispatcher.execute(request);
+                            // serialize the response from the 
+                            // command dispatcher and add it to the reponse bytes to be written back to the client.
+                            responseBytes += serializer(response);
                         }
                     }
                 }

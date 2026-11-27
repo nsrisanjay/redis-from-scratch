@@ -66,6 +66,10 @@ add_executable(redis-server
     src/main.cpp
     src/protocol/resp.cpp
     src/protocol/resp_protocol.cpp
+    src/protocol/resp_serializer.cpp
+    src/storage/keyspace.cpp
+    src/commands/command_dispatcher.cpp
+    src/commands/command_handler.cpp
 )
 
 target_include_directories(redis-server PRIVATE
